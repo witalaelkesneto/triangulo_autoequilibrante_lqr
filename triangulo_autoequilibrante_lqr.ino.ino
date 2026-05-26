@@ -1,3 +1,43 @@
+/*
+  ==========================================================================
+   Firmware de controle do triângulo autoequilibrante com roda de reação
+  ==========================================================================
+
+  Este código implementa o sistema de controle embarcado da planta utilizada
+  no trabalho. O firmware realiza a leitura do sensor inercial MPU6050, estima
+  o ângulo da estrutura por meio de um filtro de Kalman, lê o encoder do motor
+  da roda de reação, calcula os estados da planta e executa a lógica de controle
+  composta pelos modos swing-up, freio e LQR.
+
+  A estratégia de operação é dividida em três modos:
+    modo 0: swing-up por energia, utilizado para elevar a planta;
+    modo 1: freio, utilizado para reduzir a velocidade angular antes da captura;
+    modo 2: LQR, utilizado para estabilizar a planta em torno da posição vertical.
+
+  Durante a execução, o ESP32 envia pela porta serial as principais variáveis
+  do ensaio experimental, separadas por vírgula, na seguinte ordem:
+
+    modo, theta, thetaDot, omega, xi, energia, u
+
+  em que:
+    modo      -> modo de operação ativo;
+    theta     -> ângulo de inclinação da planta [rad];
+    thetaDot  -> velocidade angular do corpo [rad/s];
+    omega     -> velocidade angular da roda de reação [rad/s];
+    xi        -> estado associado à posição acumulada da roda [rad];
+    energia   -> energia mecânica calculada [J];
+    u         -> tensão equivalente de controle [V].
+
+  Os dados enviados pela serial são coletados posteriormente por um script em
+  Python e utilizados na geração dos gráficos experimentais no MATLAB.
+
+  Testado com:
+    Arduino IDE 2.3.8
+    esp32 package by Espressif Systems 2.0.17
+
+  ==========================================================================
+*/
+
 #include <Wire.h>
 #include <ESP32Encoder.h>
 #include <math.h>
@@ -39,14 +79,14 @@ float Kf[2]   = { 0, 0 };
 const float ANGLE_OFFSET_DEG = 0.0;
 const float ANGLE_POLARITY   = 1.0;
 
-// ===================== LQR =====================
+// ===================== GANHOS DO CONTROLADOR LQR =====================
 
 float K1 = -247.9;
 float K2 = -26.31;
 float K3 = -0.118;
 float K4 = 0.011;
 
-// ===================== ESTADOS =====================
+// ===================== ESTADOS DA PLANTA =====================
 
 float theta = 0.0;
 float thetaDot = 0.0;
@@ -54,7 +94,7 @@ float omega = 0.0;
 float xi = 0.0;
 float xiPrevious = 0.0;
 
-// ===================== CONTROLE =====================
+// ===================== SINAL DE CONTROLE =====================
 
 float controlVoltage = 0.0;
 int pwmCommand = 0;
@@ -75,14 +115,14 @@ const float voltageToPWM = 21.3;
 const float maxVoltage = 12.0;
 const int maxPWM = 255;
 
-// ===================== PARÂMETROS FÍSICOS =====================
+// ===================== PARÂMETROS FÍSICOS DA PLANTA =====================
 
 const float m = 0.498;
 const float g = 9.81;
 const float l = 0.10;
 const float I = 0.00498;
 
-// ===================== SWING-UP POR ENERGIA ====================
+// ===================== CONTROLE SWING-UP POR ENERGIA ====================
 
 const float thetaInicialSwing = 1.0;
 
@@ -104,20 +144,20 @@ const float polaridadeFreio = 1.0;
 
 float energia = 0.0;
 
-// ===================== CAPTURA / LQR =====================
+// ===================== CRITÉRIOS DE CAPTURA E COMUTAÇÃO =====================
 
 const float thetaLQR = 12.0 / 57.3;
 const float thetaDotLQR = 120.0 / 57.3;
 
 const float thetaCaptura = 25.0 / 57.3;
 
-// ===================== MODO =====================
+// ===================== MODO DE OPERAÇÃO =====================
 
 int modoControle = 0;
 
 bool lqrAtivo = false;
 
-// ===================== SERIAL =====================
+// ===================== ENVIO SERIAL =====================
 
 int serialCounter = 0;
 const int serialDivider = 5;
@@ -142,7 +182,7 @@ float signFloat(float value) {
   return 0.0;
 }
 
-// ===================== SETUP =====================
+// ===================== CONFIGURAÇÃO INICIAL =====================
 
 void setup() {
   Wire.begin();
@@ -183,7 +223,7 @@ void setup() {
   Serial.println("modo,theta,thetaDot,omega,xi,energia,u");
 }
 
-// ===================== LOOP =====================
+// ===================== LAÇO PRINCIPAL =====================
 
 void loop() {
   currentTime = micros();
@@ -228,7 +268,7 @@ void loop() {
   }
 }
 
-// ===================== ATIVAÇÃO DO LQR =====================
+// ===================== ATIVAÇÃO DO MODO LQR =====================
 
 void ativarLQR() {
   lqrAtivo = true;
@@ -249,7 +289,7 @@ void calcularControleLQR() {
   controlVoltage = -(K1 * theta + K2 * thetaDot + K3 * omega + K4 * xi);
 }
 
-// ===================== SWING-UP + FREIO =====================
+// ===================== CONTROLE SWING-UP E MODO DE FREIO =====================
 
 void calcularControleSwingOuFreio() {
 
@@ -279,7 +319,7 @@ void calcularControleSwingOuFreio() {
   }
 }
 
-// ===================== MPU6050 =====================
+// ===================== CONFIGURAÇÃO DO MPU6050 =====================
 
 void setupIMU() {
   Wire.beginTransmission(MPU_ADDR);
@@ -298,7 +338,7 @@ void setupIMU() {
   Wire.endTransmission();
 }
 
-// ===================== LEITURA IMU =====================
+// ===================== LEITURA E FILTRAGEM DO MPU6050 =====================
 
 void readIMU() {
   int16_t ax, ay, az, temp, gx, gy, gz;
@@ -355,7 +395,7 @@ void readIMU() {
   thetaDot = ANGLE_POLARITY * ((gyroRate - gyroBias) / 57.3);
 }
 
-// ===================== MOTOR =====================
+// ===================== CONFIGURAÇÃO DO MOTOR E DO ENCODER =====================
 
 void setupReactionWheelMotor() {
   pinMode(PIN_BRAKE, OUTPUT);
@@ -373,7 +413,7 @@ void setupReactionWheelMotor() {
   reactionWheelEncoder.clearCount();
 }
 
-// ===================== ACIONAMENTO MOTOR =====================
+// ===================== ACIONAMENTO DO MOTOR =====================
 
 void applyMotorCommand(int command) {
   if (command < 0) {
@@ -388,7 +428,7 @@ void applyMotorCommand(int command) {
   ledcWrite(PWM_CHANNEL, maxPWM - command);
 }
 
-// ===================== SERIAL =====================
+// ===================== TRANSMISSÃO DOS DADOS PELA SERIAL =====================
 
 void sendSerialData() {
   serialCounter++;

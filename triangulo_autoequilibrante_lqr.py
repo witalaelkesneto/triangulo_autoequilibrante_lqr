@@ -1,9 +1,37 @@
+"""
+Coleta de dados experimentais do triângulo autoequilibrante via porta serial.
+
+Este script realiza a leitura dos dados enviados pelo ESP32 durante os ensaios
+experimentais da planta. O firmware embarcado deve transmitir, em cada linha,
+sete valores separados por vírgula, seguindo a ordem:
+
+    modo, theta, theta_dot, omega, xi, energia, u
+
+em que:
+    modo      -> modo de operação ativo no firmware
+    theta     -> ângulo de inclinação da planta [rad]
+    theta_dot -> velocidade angular do corpo [rad/s]
+    omega     -> velocidade angular da roda de reação [rad/s]
+    xi        -> estado associado à posição acumulada da roda [rad]
+    energia   -> energia mecânica calculada [J]
+    u         -> tensão equivalente de controle [V]
+
+O programa abre a porta serial configurada, aguarda o recebimento de linhas
+numéricas válidas, registra os dados durante o tempo definido em TEMPO_COLETA
+e salva as amostras em um arquivo CSV. O nome do arquivo é gerado
+automaticamente com data e horário da coleta.
+
+O CSV gerado é utilizado posteriormente no MATLAB para processamento dos dados
+experimentais e geração dos gráficos apresentados na monografia.
+"""
+
 import serial
 import csv
 import time
 from datetime import datetime
 
-# ===================== CONFIGURAÇÕES =====================
+
+# Configurações da comunicação serial e da coleta
 
 PORTA_SERIAL = "COM3"
 BAUDRATE = 115200
@@ -12,9 +40,15 @@ TEMPO_COLETA = 40
 data_hora = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 NOME_ARQUIVO = f"dados_planta_{data_hora}.csv"
 
-# ===================== FUNÇÕES AUXILIARES =====================
 
 def linha_numerica_valida(linha):
+    """
+    Verifica se a linha recebida possui o formato esperado.
+
+    A linha é considerada válida quando contém sete campos separados por
+    vírgula e todos podem ser convertidos para valores numéricos.
+    """
+
     dados = linha.split(",")
 
     if len(dados) != 7:
@@ -34,6 +68,11 @@ def linha_numerica_valida(linha):
 
 
 def tentar_reset_esp32(serial_esp):
+    """
+    Alterna os sinais DTR e RTS para reiniciar ou liberar a comunicação
+    com o ESP32 antes do início da aquisição.
+    """
+
     print("Tentando reiniciar/liberar ESP32...")
 
     serial_esp.dtr = False
@@ -50,8 +89,6 @@ def tentar_reset_esp32(serial_esp):
 
     print("ESP32 liberado. Aguardando dados...")
 
-
-# ===================== COLETA =====================
 
 def main():
     print("Iniciando coleta de dados...")
