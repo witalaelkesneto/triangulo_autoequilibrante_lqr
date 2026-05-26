@@ -10,7 +10,7 @@ A planta utiliza uma estrutura fabricada por impressão 3D, um motor de corrente
 
 O vídeo demonstrativo do funcionamento da planta pode ser acessado no link abaixo:
 
-- **Vídeo:** (https://youtu.be/2tPs7unF_Ww)
+- **Vídeo:** https://youtu.be/2tPs7unF_Ww
 
 ## Estrutura do repositório
 
