@@ -136,7 +136,7 @@ const float excessoEnergia = 0.15;
 
 const float Eref = Etopo + excessoEnergia * DeltaE;
 
-const float kSwing = 0.75*12.2815;
+const float kSwing = 0.7*12.2815;
 
 const float polaridadeSwing = -1.0;
 
@@ -295,7 +295,9 @@ void calcularControleSwingOuFreio() {
 
   if ((fabs(theta) < thetaCaptura) && (fabs(thetaDot) >= thetaDotLQR)) {
 
-    controlVoltage = polaridadeFreio * maxVoltage * signFloat(thetaDot);
+    controlVoltage = 0.8*polaridadeFreio * maxVoltage * signFloat(thetaDot);
+
+    controlVoltage = constrain(controlVoltage, -maxVoltage*0.8, maxVoltage*0.8);
 
     modoControle = 1;
 
@@ -304,14 +306,6 @@ void calcularControleSwingOuFreio() {
     float erroE = energia - Eref;
 
     float sinal = signFloat(thetaDot);
-
-    if (sinal == 0.0) {
-      sinal = signFloat(theta);
-    }
-
-    if (sinal == 0.0) {
-      sinal = 1.0;
-    }
 
     controlVoltage = -polaridadeSwing * kSwing * erroE * sinal;
 
